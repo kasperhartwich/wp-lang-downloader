@@ -24,13 +24,12 @@ class WPlang {
   function __construct() {
   }
 
-  function getData() {
+  function getFilelink() {
+    unset($this->html);
     $this->file = file_get_contents($this->languages[$this->language]['site']);
+    $this->debug('Getting html page from ' . $this->languages[$this->language]['site']);
     $this->html = new simple_html_dom();
     $this->html->load($this->file);
-  }
-
-  function getFilelink() {
     if (!$this->filelink) {
       foreach ($this->html->find("a[class=download-button]") as $a) {
         $this->filelink = $a->href;
@@ -50,15 +49,13 @@ class WPlang {
 
   function setLanguage($language) {
     $this->language = $language;
-    $this->getData();
-  }
-
-  function getLocalpath() {
-    return 'temp/wordpress-' . $this->getNewestVersion() . '-' . $this->language . '.zip';
+    $this->filelink = false;
+    $this->debug('Language setted to ' . $this->language);
   }
 
   function download($url = false) {
     if (!$url) {$url = $this->getFilelink();}
+    $this->debug('Downloading latest ' . $this->language . ' file: ' . $url);
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     $data = curl_exec($ch);
@@ -69,30 +66,35 @@ class WPlang {
 
   function extract() {
     $za = new ZipArchive();
-
-    $za->open($this->getLocalpath());
+    $zipfile = 'temp/wordpress-' . $this->getNewestVersion() . '-' . $this->language . '.zip';
+    $za->open($zipfile);
+    $this->debug('Extracting from latest ' . $this->language . ' file: ' . $zipfile);
     $files = array(
       'languagefiles/' . $this->getNewestVersion() . '/' . $this->language . '.mo' => 'wordpress/wp-content/themes/twentyeleven/languages/' . $this->language . '.mo',
       'languagefiles/' . $this->getNewestVersion() . '/' . $this->language . '.po' => 'wordpress/wp-content/themes/twentyeleven/languages/' . $this->language . '.po',
     );
     foreach ($files as $localpath => $zippath) {
       if (!is_dir('languagefiles/' . $this->getNewestVersion())) {mkdir('languagefiles/' . $this->getNewestVersion());}
-      $data = $za->getFromName($zippath);
+      if (!$data = $za->getFromName($zippath)) {die('Languagefile ' . $zippath . ' not found in archive: ' . $zipfile);}
+
       file_put_contents($localpath, $data);
     }
-    return $this->save('latest_extracted', $this->getNewestVersion());
+    return !empty($data) ? $this->save('latest_extracted', $this->getNewestVersion()) : false;
   }
 
   function process() {
-    if ($this->load('latest_processed')!=$this->getNewestVersion()) {
+    if ($this->load('latest_downloaded')!=$this->getNewestVersion()) {
       $this->download();
-      $this->extract();
-      return $this->save('latest_processed', $this->getNewestVersion());
-    } else {
-      return false;
     }
+    if ($this->load('latest_extracted')!=$this->getNewestVersion()) {
+      $this->extract();
+    }
+    return $this->save('latest_processed', $this->getNewestVersion());
   }
 
+  function debug($text) {
+    echo $text . "\n";
+  }
 
   /*
    * Database
@@ -114,7 +116,12 @@ class WPlang {
     $this->database[$language][$key] = $value;
     return file_put_contents($this->dbfile, json_encode($this->database));
   }
-  function dump() {
+
+  function db_dump() {
+    return file_put_contents($this->dbfile, '');
+  }
+
+  function db_export() {
     if (!$this->database) {$this->loaddb();}
     var_dump($this->database);
   }

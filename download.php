@@ -6,7 +6,7 @@ require('inc/wplang.php');
 
 
 $wpdl = new WPlang();
-
+$wpdl->db_dump();
 
 foreach ($wpdl->getLanguages() as $languagecode => $language) {
   $wpdl->setLanguage($languagecode);
@@ -22,4 +22,4 @@ foreach ($wpdl->getLanguages() as $languagecode => $language) {
 
 
 
-$wpdl->dump();
+$wpdl->db_export();
